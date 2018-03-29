@@ -46,14 +46,10 @@ def validateURL(url):
         sourceFilename = r.headers.get('Content-Disposition')
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
-        elif not sourceFilename:
-            ext = os.path.splitext(url)[1]
-        if 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' in r.headers.get('content-type'):
-            ext = '.xlsx'
-        elif 'application/vnd.ms-excel' in r.headers.get('content-type'):
-            ext = '.xls'
+        else:
+            ext = r.headers.get('Content-Type').split('/')[-1]
         validURL = r.getcode() == 200
-        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx', '.pdf']
+        validFiletype = ext.lower() in ['csv', '.xls', 'xlsx', '.pdf', 'vnd.openxmlformats-officedocument.spreadsheetml.sheet']
         return validURL, validFiletype
     except:
         print ("Error validating URL.")
@@ -69,7 +65,7 @@ def validate(filename, file_url):
         return False
     if not validURL:
         print filename, "*Error: Invalid URL*"
-        print file_url
+        print file_url.encode('utf-8')
         return False
     if not validFiletype:
         print filename, "*Error: Invalid filetype*"
@@ -86,8 +82,8 @@ def convert_mth_strings ( mth_string ):
 
 #### VARIABLES 1.0
 
-entity_id = "FTRJFX_BHNFT_gov"
-url = "https://data.gov.uk/dataset/financial-transactions-data-burtonhospitals-nhft"
+entity_id = "FTRGTX_CUHNFT_gov"
+url = "https://www.cuh.nhs.uk/services/non-clinical-services/finance/cuh-expenditure-information"
 errors = 0
 data = []
 
@@ -98,15 +94,21 @@ html = urllib2.urlopen(url)
 soup = BeautifulSoup(html, 'lxml')
 
 #### SCRAPE DATA
-
-blocks = soup.find_all('div', 'dataset-resource')
-for block in blocks:
-    title = block.find('div', 'inner-row description').find('span').text.strip().split()
-    url = block.find('div', 'inner-row actions').find_all('span')[1].find('a')['href']
-    csvMth = title[2][:3]
-    csvYr = title[1]
-    csvMth = convert_mth_strings(csvMth.upper())
-    data.append([csvYr, csvMth, url])
+for i in range(0, 4):
+    url = "https://www.cuh.nhs.uk/services/non-clinical-services/finance/cuh-expenditure-information?page={}"
+    html = urllib2.urlopen(url.format(i))
+    soup = BeautifulSoup(html, 'lxml')
+    rows = soup.find_all('span', 'file')
+    for row in rows:
+        link = row.find('a')['href']
+        if '.csv' in link:
+            title = row.text.split()
+            csvMth = title[-2][:3]
+            csvYr = title[-1]
+            if '-' in csvMth:
+                csvMth = 'Y1'
+            csvMth = convert_mth_strings(csvMth.upper())
+            data.append([csvYr, csvMth, link])
 
 
 
@@ -131,4 +133,3 @@ if errors > 0:
 
 
 #### EOF
-
