@@ -9,8 +9,8 @@ import urllib2
 from datetime import datetime
 from bs4 import BeautifulSoup
 
-
-#### FUNCTIONS 1.0
+#### FUNCTIONS 1.1
+import requests
 
 def validateFilename(filename):
     filenameregex = '^[a-zA-Z0-9]+_[a-zA-Z0-9]+_[a-zA-Z0-9]+_[0-9][0-9][0-9][0-9]_[0-9QY][0-9]$'
@@ -38,24 +38,25 @@ def validateFilename(filename):
 
 def validateURL(url):
     try:
-        r = urllib2.urlopen(url)
+        r = requests.get(url)
         count = 1
-        while r.getcode() == 500 and count < 4:
+        while r.status_code == 500 and count < 4:
             print ("Attempt {0} - Status code: {1}. Retrying.".format(count, r.status_code))
             count += 1
-            r = urllib2.urlopen(url)
+            r = requests.get(url)
         sourceFilename = r.headers.get('Content-Disposition')
 
         if sourceFilename:
             ext = os.path.splitext(sourceFilename)[1].replace('"', '').replace(';', '').replace(' ', '')
         else:
             ext = os.path.splitext(url)[1]
-        validURL = r.getcode() == 200
-        validFiletype = ext.lower() in ['.csv', '.xls', '.xlsx']
+        validURL = r.status_code == 200
+        validFiletype = ext.lower() in ['.csv', '.xls', '.zip', '.xlsx', '.pdf']
         return validURL, validFiletype
     except:
         print ("Error validating URL.")
         return False, False
+
 
 
 def validate(filename, file_url):
@@ -82,36 +83,33 @@ def convert_mth_strings ( mth_string ):
         mth_string = mth_string.replace(k, v)
     return mth_string
 
-
 #### VARIABLES 1.0
 
-entity_id = "FTTAJX_BCPNFT_gov"
-url = "https://data.gov.uk/dataset/financial-transactions-data-smhft"
+entity_id = "FTRXLX_BFAWHNFT_gov"
+url = "http://www.bfwh.nhs.uk/about-our-trust/transparency/"
 errors = 0
 data = []
 
-
 #### READ HTML 1.0
-import requests
-html = requests.get(url)
-soup = BeautifulSoup(html.text, "lxml")
+
+html = urllib2.urlopen(url)
+soup = BeautifulSoup(html, 'lxml')
 
 
 #### SCRAPE DATA
 
-blocks = soup.find_all('div', 'dataset-resource')
+
+blocks = soup.find_all('div', 'document-icon')
 for block in blocks:
-    title = block.find('span', 'inner-cell').text.strip().split()
-    url = block.find_all('a')[1]['href']
-    csvMth = title[1][:3]
-    csvYr = title[2]
-    if '25' in csvYr:
-        csvYr = '20'+url.split('/')[-1].split('.')[0][-2:]
-        csvMth = url.split('/')[-1][:3]
-    if 'Apr' in csvMth and '2017' in csvYr:
-        url = block.find_all('a')[2]['href']
+    link = block.find('a')
+    url = link['href']
+    csvMth = link.find('span').text.replace(u'Transactions over £25000 ', '').split('-')[0][:3]
+    csvYr = link.find('span').text.replace(u'Transactions over £25000 ', '').split('-')[-1]
+    if '20' not in csvYr:
+        csvYr = '20'+csvYr
     csvMth = convert_mth_strings(csvMth.upper())
     data.append([csvYr, csvMth, url])
+
 
 #### STORE DATA 1.0
 
